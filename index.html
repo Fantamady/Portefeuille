@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0D7A63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Portefeuille">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>Portefeuille d’investissement</title>
+<style>
+:root{--bg:#F2F5F3;--sf:#fff;--ink:#14231F;--mute:#5B6E68;--line:#D6E0DB;--ac:#0D7A63;--acink:#fff;--gain:#12794A;--loss:#B8322A;--warn:#FBEFD5;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1815;--sf:#16241F;--ink:#E7F0EC;--mute:#93A8A0;--line:#2A3D36;--ac:#3FC3A3;--acink:#06201A;--gain:#4CCB8C;--loss:#FF8A80;--warn:#3A2E12;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E1815;--sf:#16241F;--ink:#E7F0EC;--mute:#93A8A0;--line:#2A3D36;--ac:#3FC3A3;--acink:#06201A;--gain:#4CCB8C;--loss:#FF8A80;--warn:#3A2E12;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0 auto;max-width:640px;padding:0 14px 90px;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1{font-size:14px;margin:0;color:var(--mute);font-weight:600}
+.hero{padding:18px 0 4px}
+#total{font:700 40px/1.1 ui-serif,Georgia,serif;font-variant-numeric:tabular-nums;margin:4px 0 8px}
+input,select,button{font:inherit;color:inherit}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--sf);color:var(--ink)}
+input[type=range]{padding:0;accent-color:var(--ac)}
+button{border:0;border-radius:8px;padding:10px 14px;background:var(--ac);color:var(--acink);font-weight:600;cursor:pointer}
+button.g{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.d{background:transparent;color:var(--loss);border:1px solid var(--line)}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.k{color:var(--mute);font-size:12.5px}.v{font-weight:700;font-variant-numeric:tabular-nums}
+.up{color:var(--gain)}.dn{color:var(--loss)}
+.bar{height:8px;border-radius:4px;background:var(--ac);margin-top:4px}
+.alert{background:var(--warn);border-color:var(--loss)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--sf);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;border-radius:0;background:transparent;color:var(--mute);padding:14px 2px;font-size:14px}
+nav button.on{color:var(--ac);box-shadow:inset 0 3px 0 var(--ac)}
+#toast{position:fixed;left:14px;right:14px;bottom:calc(66px + env(safe-area-inset-bottom,0px));padding:12px;border-radius:10px;background:var(--ink);color:var(--bg);display:none;text-align:center;z-index:5}
+textarea{min-height:200px;font:12px/1.4 ui-monospace,Consolas,monospace}
+</style></head><body>
+<div class="hero"><h1>Valeur du portefeuille</h1><div id="total"></div>
+<div class="row"><span class="k">Simulation de marché</span><b id="siml"></b></div>
+<input type="range" id="sim" min="-50" max="50" step="1" value="0" aria-label="Variation du marché en pourcentage">
+<div class="row" style="margin-top:4px"><span class="k">Tous les prix varient de ce pourcentage</span><button class="g" style="padding:4px 10px" onclick="S.sim=0;$('#sim').value=0;render()">Réinitialiser</button></div></div>
+<div id="view"></div><div id="toast"></div>
+<nav id="nav"></nav>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=(n,d=2)=>Number(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const dm=i=>i.split('-').reverse().join('/');
+const TY=['Action','Obligation','ETF','Crypto'];
+const today=new Date().toISOString().slice(0,10);
+let S={a:[{id:1,sym:'IAM',nom:'Maroc Telecom',type:'Action',sec:'Télécom',p:95},{id:2,sym:'AAPL',nom:'Apple',type:'Action',sec:'Technologie',p:190},{id:3,sym:'BTC',nom:'Bitcoin',type:'Crypto',sec:'Finance',p:60000},{id:4,sym:'ATW',nom:'Attijariwafa Bank',type:'Action',sec:'Finance',p:480}],
+t:[{id:1,ia:1,type:'ACHAT',q:100,p:110,d:'2026-01-12'},{id:2,ia:2,type:'ACHAT',q:10,p:150,d:'2026-02-03'},{id:3,ia:3,type:'ACHAT',q:1,p:52000,d:'2026-03-01'},{id:4,ia:4,type:'ACHAT',q:5,p:450,d:'2026-04-10'},{id:5,ia:1,type:'VENTE',q:20,p:100,d:'2026-05-15'},{id:6,ia:2,type:'ACHAT',q:5,p:170,d:'2026-06-20'}],
+ia:5,it:7,sim:0,tab:'actifs',ed:null,fa:'',sa:'nom',ft:'',st:'date',sl:10,sp:100};
+const px=a=>a.p*(1+S.sim/100);
+function pos(a){let q=0,qa=0,c=0;S.t.filter(t=>t.ia===a.id).forEach(t=>{if(t.type==='ACHAT'){q+=t.q;qa+=t.q;c+=t.q*t.p}else q-=t.q});
+const p=px(a),m=qa?c/qa:0;return{q,qa,m,r:qa&&m?(p-m)/m*100:0,pv:qa?(p-m)*q:0,v:q*p}}
+function toast(m,bad){const e=$('#toast');e.textContent=m;e.style.background=bad?'var(--loss)':'var(--ink)';e.style.color=bad?'#fff':'var(--bg)';e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',3200)}
+const tabs=[['actifs','Actifs'],['trans','Transactions'],['stats','Analyse'],['fichier','Fichier']];
+function render(){$('#total').textContent=fmt(S.a.reduce((s,a)=>s+pos(a).v,0));
+$('#siml').textContent=(S.sim>0?'+':'')+S.sim+' %';
+$('#nav').innerHTML=tabs.map(([k,l])=>`<button class="${S.tab===k?'on':''}" onclick="S.tab='${k}';S.ed=null;render();scrollTo(0,0)">${l}</button>`).join('');
+({actifs:viewA,trans:viewT,stats:viewS,fichier:viewF})[S.tab]()}
+$('#sim').oninput=e=>{S.sim=+e.target.value;render()};
+/* ----- Actifs ----- */
+function viewA(){const e=S.ed?S.a.find(a=>a.id===S.ed):null;
+$('#view').innerHTML=`<div class="card"><b>${e?'Modifier l’actif':'Nouvel actif'}</b><div class="grid" style="margin-top:8px">
+<input id="fs" placeholder="Symbole" value="${e?esc(e.sym):''}"><input id="fn" placeholder="Nom" value="${e?esc(e.nom):''}">
+<select id="fy">${TY.map(x=>`<option${e&&e.type===x?' selected':''}>${x}</option>`).join('')}</select>
+<input id="fc" placeholder="Secteur" value="${e?esc(e.sec):''}"><input id="fp" type="number" min="0" step="any" placeholder="Prix actuel" value="${e?e.p:''}"></div>
+<div class="row" style="margin-top:8px;justify-content:flex-start"><button onclick="saveA()">${e?'Enregistrer':'Ajouter l’actif'}</button>${e?'<button class="g" onclick="S.ed=null;render()">Annuler</button>':''}</div></div>
+<div class="card"><div class="grid"><input placeholder="Rechercher un actif" value="${esc(S.fa)}" oninput="S.fa=this.value;listA()">
+<select onchange="S.sa=this.value;listA()"><option value="nom"${S.sa==='nom'?' selected':''}>Tri : nom A–Z</option><option value="pc"${S.sa==='pc'?' selected':''}>Tri : prix croissant</option><option value="pd"${S.sa==='pd'?' selected':''}>Tri : prix décroissant</option></select></div>
+<button class="g" style="margin-top:8px" onclick="dedupA()">Supprimer les doublons</button></div><div id="lista"></div>`;listA()}
+function listA(){const f=S.fa.toLowerCase();let L=S.a.filter(a=>(a.sym+a.nom+a.type+a.sec).toLowerCase().includes(f));
+L.sort((x,y)=>S.sa==='nom'?x.nom.localeCompare(y.nom):S.sa==='pc'?x.p-y.p:y.p-x.p);
+$('#lista').innerHTML=L.length?L.map(a=>`<div class="card"><div class="row"><div><b>${esc(a.sym)}</b> ${esc(a.nom)}<div class="k">${esc(a.type)}, ${esc(a.sec)}</div></div><div class="v">${fmt(px(a))}</div></div>
+<div class="row" style="margin-top:8px"><span class="k">Quantité détenue : ${pos(a).q}</span><span><button class="g" onclick="S.ed=${a.id};render();scrollTo(0,0)">Modifier</button> <button class="d" onclick="delA(${a.id})">Supprimer</button></span></div></div>`).join(''):'<div class="card k">Aucun actif ne correspond. Ajoutez-en un avec le formulaire.</div>'}
+function saveA(){const sym=$('#fs').value.trim(),nom=$('#fn').value.trim(),p=parseFloat($('#fp').value);
+if(!sym||!nom||!(p>=0)){return toast('Renseignez le symbole, le nom et un prix positif.',1)}
+const o={sym,nom,type:$('#fy').value,sec:$('#fc').value.trim()||'Autre',p};
+if(S.ed){Object.assign(S.a.find(a=>a.id===S.ed),o);S.ed=null;toast('Actif modifié.')}else{S.a.push({id:S.ia++,...o});toast('Actif ajouté.')}render()}
+function delA(id){const n=S.t.filter(t=>t.ia===id).length;S.a=S.a.filter(a=>a.id!==id);S.t=S.t.filter(t=>t.ia!==id);toast('Actif supprimé'+(n?' avec ses '+n+' transaction(s).':'.'));render()}
+function dedupA(){let n=0;for(let i=0;i<S.a.length;i++)for(let j=i+1;j<S.a.length;){if(S.a[i].sym.toUpperCase()===S.a[j].sym.toUpperCase()){S.t.forEach(t=>{if(t.ia===S.a[j].id)t.ia=S.a[i].id});S.a.splice(j,1);n++}else j++}
+toast(n+' doublon(s) d’actifs supprimé(s).');render()}
+/* ----- Transactions ----- */
+function viewT(){if(!S.a.length){$('#view').innerHTML='<div class="card k">Ajoutez d’abord un actif pour enregistrer des transactions.</div>';return}
+$('#view').innerHTML=`<div class="card"><b>Nouvelle transaction</b><div class="grid" style="margin-top:8px">
+<select id="ta">${S.a.map(a=>`<option value="${a.id}">${esc(a.sym)}</option>`).join('')}</select><select id="tt"><option>ACHAT</option><option>VENTE</option></select>
+<input id="tq" type="number" min="1" step="1" placeholder="Quantité"><input id="tp" type="number" min="0" step="any" placeholder="Prix unitaire"><input id="td" type="date" value="${today}"></div>
+<button style="margin-top:8px" onclick="addT()">Ajouter la transaction</button></div>
+<div class="card"><div class="grid"><input placeholder="Rechercher (symbole, date)" value="${esc(S.ft)}" oninput="S.ft=this.value;listT()">
+<select onchange="S.st=this.value;listT()"><option value="date"${S.st==='date'?' selected':''}>Tri : date</option><option value="mt"${S.st==='mt'?' selected':''}>Tri : montant</option></select></div>
+<button class="g" style="margin-top:8px" onclick="dedupT()">Supprimer les doublons</button></div><div id="listt"></div>`;listT()}
+function addT(){const ia=+$('#ta').value,type=$('#tt').value,q=parseInt($('#tq').value),p=parseFloat($('#tp').value),d=$('#td').value;
+if(!(q>0)||!(p>=0)||!d)return toast('Indiquez une quantité positive, un prix et une date.',1);
+const a=S.a.find(x=>x.id===ia),h=pos(a).q;
+if(type==='VENTE'&&q>h)return toast('Vente refusée : vous détenez '+h+' titre(s) de '+a.sym+'.',1);
+S.t.push({id:S.it++,ia,type,q,p,d});toast('Transaction ajoutée.');render()}
+function listT(){const f=S.ft.toLowerCase();let L=S.t.map(t=>({t,a:S.a.find(a=>a.id===t.ia)})).filter(x=>x.a&&(x.a.sym+' '+x.t.type+' '+dm(x.t.d)).toLowerCase().includes(f));
+L.sort((x,y)=>S.st==='date'?x.t.d.localeCompare(y.t.d):y.t.q*y.t.p-x.t.q*x.t.p);
+$('#listt').innerHTML=L.length?L.map(({t,a})=>`<div class="card"><div class="row"><div><b>${esc(a.sym)}</b> <span class="${t.type==='ACHAT'?'up':'dn'}">${t.type}</span><div class="k">${t.q} × ${fmt(t.p)} le ${dm(t.d)}</div></div>
+<div style="text-align:right"><div class="v">${fmt(t.q*t.p)}</div><button class="d" style="padding:4px 10px;margin-top:4px" onclick="S.t=S.t.filter(x=>x.id!==${t.id});render()">Supprimer</button></div></div></div>`).join(''):'<div class="card k">Aucune transaction ne correspond.</div>'}
+function dedupT(){let n=0;const k=t=>[t.ia,t.type,t.q,t.p,t.d].join('|'),seen=new Set();S.t=S.t.filter(t=>{if(seen.has(k(t))){n++;return false}seen.add(k(t));return true});toast(n+' doublon(s) de transactions supprimé(s).');render()}
+/* ----- Analyse ----- */
+function viewS(){if(!S.a.length){$('#view').innerHTML='<div class="card k">Aucun actif : les statistiques s’afficheront ici.</div>';return}
+const P=S.a.map(a=>({a,...pos(a)})),pr=S.a.map(px),mn=pr.indexOf(Math.min(...pr)),mx=pr.indexOf(Math.max(...pr));
+const ach=S.t.filter(t=>t.type==='ACHAT').reduce((s,t)=>s+t.q*t.p,0),ven=S.t.filter(t=>t.type==='VENTE').reduce((s,t)=>s+t.q*t.p,0);
+const R=P.filter(x=>x.qa),rm=R.length?R.reduce((s,x)=>s+x.r,0)/R.length:null,sup=S.a.filter(a=>px(a)>=S.sp).length;
+const cls=n=>n>=0?'up':'dn',sg=n=>(n>0?'+':'')+fmt(n);
+const sec={};P.forEach(x=>{if(x.v>0)sec[x.a.sec]=(sec[x.a.sec]||0)+x.v});const tv=Object.values(sec).reduce((s,v)=>s+v,0);
+const al=R.filter(x=>x.r<=-S.sl);
+$('#view').innerHTML=`<div class="grid">
+<div class="card"><div class="k">Total des achats</div><div class="v">${fmt(ach)}</div></div><div class="card"><div class="k">Total des ventes</div><div class="v">${fmt(ven)}</div></div>
+<div class="card"><div class="k">Prix minimum</div><div class="v">${fmt(pr[mn])}</div><div class="k">${esc(S.a[mn].sym)}</div></div><div class="card"><div class="k">Prix maximum</div><div class="v">${fmt(pr[mx])}</div><div class="k">${esc(S.a[mx].sym)}</div></div>
+<div class="card"><div class="k">Prix moyen</div><div class="v">${fmt(pr.reduce((s,v)=>s+v,0)/pr.length)}</div></div>
+<div class="card"><div class="k">Rendement moyen</div><div class="v ${rm===null?'':cls(rm)}">${rm===null?'aucun achat':sg(rm)+' %'}</div></div></div>
+<div class="card"><div class="row"><span>Actifs dont le prix est supérieur ou égal à</span><input type="number" style="width:110px" value="${S.sp}" onchange="S.sp=+this.value||0;render()"></div>
+<div class="v" style="margin-top:6px">${fmt(100*sup/S.a.length,1)} % (${sup} sur ${S.a.length})</div></div>
+<div class="card"><b>Classement par plus-value</b>${R.length?R.sort((x,y)=>y.pv-x.pv).map((x,i)=>`<div class="row" style="margin-top:8px"><span>${i+1}. <b>${esc(x.a.sym)}</b> <span class="k">${x.q} titres, achat moyen ${fmt(x.m)}</span></span><span class="v ${cls(x.pv)}">${sg(x.pv)}<div class="k ${cls(x.r)}" style="text-align:right">${sg(x.r)} %</div></span></div>`).join(''):'<div class="k">Aucun achat enregistré.</div>'}</div>
+<div class="card ${al.length?'alert':''}"><div class="row"><b>Alertes de perte</b><span class="k">seuil <input type="number" min="0" style="width:80px;display:inline-block" value="${S.sl}" onchange="S.sl=+this.value||0;render()"> %</span></div>
+${al.length?al.map(x=>`<div class="row dn" style="margin-top:8px"><b>${esc(x.a.sym)}</b><span>${sg(x.r)} % (achat moyen ${fmt(x.m)}, prix ${fmt(px(x.a))})</span></div>`).join(''):'<div class="k" style="margin-top:6px">Aucun actif ne perd '+S.sl+' % ou plus.</div>'}</div>
+<div class="card"><b>Répartition par secteur</b>${tv>0?Object.entries(sec).sort((x,y)=>y[1]-x[1]).map(([s,v])=>`<div style="margin-top:8px"><div class="row"><span>${esc(s)}</span><span class="v">${fmt(100*v/tv,1)} %</span></div><div class="bar" style="width:${100*v/tv}%"></div></div>`).join(''):'<div class="k">Aucun actif détenu.</div>'}</div>`}
+/* ----- Fichier ----- */
+function exportTxt(){return S.a.map(a=>['A',a.id,a.sym,a.nom,a.type,a.sec,a.p].join(';')).concat(S.t.map(t=>['T',t.id,t.ia,t.type,t.q,t.p,dm(t.d)].join(';'))).join('\n')}
+function viewF(){$('#view').innerHTML=`<div class="card"><b>Export et import (format texte du programme C)</b><div class="k" style="margin:4px 0 8px">Une ligne par enregistrement : A pour un actif, T pour une transaction, champs séparés par des points-virgules.</div>
+<textarea id="fx" spellcheck="false">${esc(exportTxt())}</textarea>
+<div class="row" style="margin-top:8px;justify-content:flex-start"><button class="g" onclick="$('#fx').value=exportTxt();toast('Export mis à jour.')">Exporter l’état courant</button><button onclick="impT()">Importer ce texte</button></div></div>`}
+function impT(){const A=[],T=[];let ig=0;$('#fx').value.split(/\r?\n/).forEach(l=>{if(!l.trim())return;const c=l.split(';');
+if(c[0]==='A'&&c.length===7&&+c[1]>0&&+c[6]>=0&&!A.some(a=>a.id===+c[1]))A.push({id:+c[1],sym:c[2],nom:c[3],type:c[4],sec:c[5],p:+c[6]});
+else if(c[0]==='T'&&c.length===7){const m=c[6].match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(m&&+c[1]>0&&+c[4]>0&&+c[5]>=0&&(c[3]==='ACHAT'||c[3]==='VENTE')&&A.some(a=>a.id===+c[2])&&!T.some(t=>t.id===+c[1]))T.push({id:+c[1],ia:+c[2],type:c[3],q:+c[4],p:+c[5],d:m[3]+'-'+m[2]+'-'+m[1]});else ig++}else ig++});
+S.a=A;S.t=T;S.ia=Math.max(0,...A.map(a=>a.id))+1;S.it=Math.max(0,...T.map(t=>t.id))+1;toast('Import : '+A.length+' actif(s), '+T.length+' transaction(s), '+ig+' ligne(s) ignorée(s).');render()}
+render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+</script></body></html>
